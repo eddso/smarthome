@@ -1,4 +1,5 @@
 # NIBE
+Plugin for SmartHome https://github.com/mknx/smarthome
 
 Requirements
 ============
