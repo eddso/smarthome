@@ -3,7 +3,7 @@
 #########################################################################
 #  Copyright 2013 KNX-User-Forum e.V.           http://knx-user-forum.de/
 #########################################################################
-#  NIBE plugin for SmartHome.py.         http://mknx.github.io/smarthome/
+#  NIBE plugin for SmartHome.py.          https://github.com/smarthomeNG/
 #
 #  This plugin is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 #########################################################################
 
 import logging
+from lib.model.smartplugin import SmartPlugin
 import serial
 import re
 import time
@@ -28,7 +29,11 @@ from struct import *
 
 logger = logging.getLogger('NIBE')
 
-class NIBE():
+class NIBE(SmartPlugin):
+
+    ALLOW_MULTIINSTANCE = False
+    PLUGIN_VERSION = "1.2.1"
+
     def __init__(self, smarthome, serialport):
         self._sh = smarthome
         self._nibe_regs = {}
@@ -37,7 +42,7 @@ class NIBE():
         CMSPAR = 0x40000000
         cflag |= termios.PARENB | CMSPAR | termios.PARODD # to select MARK parity
         termios.tcsetattr(self._serial, termios.TCSANOW, [iflag, oflag, cflag, lflag, ispeed, ospeed, cc])
-    
+
     def run(self):
         self.alive = True
         try:
@@ -48,26 +53,26 @@ class NIBE():
                 ret = self._serial.read(2)
                 if ret[0] != 0x00 or ret[1] != 0x14:
                     continue
-                
+
                 self._serial.write(b"\x06")
-                
+
                 frm = bytes()
                 frm += self._serial.read(4) #<C0> <00> <59> <len>
                 if frm[0] == 0x03:
                     continue
-                
+
                 l = int(frm[3])
                 frm += self._serial.read(l+1)
-                
+
                 self._serial.write(b"\x06")
-                
+
                 crc = 0
                 for i in frm[:-1]:
                     crc ^= i
                 if crc != frm[-1]:
                     logger.warning("frame crc error")
                     continue
-                
+
                 msg = frm[4:-1]
                 l = len(msg)
                 i = 4
@@ -79,25 +84,25 @@ class NIBE():
                     else:
                         raw = bytes([msg[i-2]])
                         i+=3
-                    
+
                     if not reg in self._nibe_regs:
                         continue
                     if self._nibe_regs[reg]['raw'] == raw:
                         continue
-                        
+
                     value = self._decode(reg, raw)
                     logger.debug("update_item: reg:{0} = {1}".format(reg,value))
                     self._nibe_regs[reg]['raw'] = raw
                     for item in self._nibe_regs[reg]['items']:
                         item(value, 'NIBE', 'REG {}'.format(reg))
-                        
+
         except Exception as e:
             logger.warning("nibe: {0}".format(e))
 
     def stop(self):
         self.alive = False
         self._serial.close()
-        
+
     def parse_item(self, item):
         if 'nibe_reg' in item.conf:
             logger.debug("parse item: {0}".format(item))
@@ -107,24 +112,24 @@ class NIBE():
             else:
                 self._nibe_regs[nibe_reg]['items'].append(item)
         return None
-    
+
     def _decode(self, reg, raw):
         if len(raw) == 2:
             value = unpack('>H',raw)[0]
         else:
             value = unpack('B',raw)[0]
-            
-        if reg in [0,32,33,34,35,36,38,44,45,46,48,100,101,102,103,104,105]:    
+
+        if reg in [0,32,33,34,35,36,38,44,45,46,48,100,101,102,103,104,105]:
             #0    CPUID
-            #32   Zusatzheizung erlaubt   
-            #33   Max dF Commpressor   
-            #34   Verd. Freq. regP   
+            #32   Zusatzheizung erlaubt
+            #33   Max dF Commpressor
+            #34   Verd. Freq. regP
             #35   Min Startzeit Freq min
             #36   Minzeit konst. Freq min
-            #38   Verd. Freq. GradMin   
+            #38   Verd. Freq. GradMin
             #44   Pumpengeschwindigkeit %
-            #45   Bw reg P   
-            #46   Bw reg Q   
+            #45   Bw reg P
+            #46   Bw reg Q
             #48   Bw reg Wert xP %
             #100  Datum - Jahr
             #101  Datum - Monat
@@ -133,7 +138,7 @@ class NIBE():
             #104  Uhrzeit - Minute
             #105  Uhrzeit - Sekunden
             return int(value)
-            
+
         if reg == 31:
             #31   Status Heizung
             #1 Auto
@@ -141,35 +146,35 @@ class NIBE():
             #5 Brauchwasser
             #6 Zusatzheizung
             return int(value)
-            
+
         if reg in [4,8]: #signed
             #4    Heizkurvenverschiebung
             #8    Gradminuten
             return int(unpack('h',pack('H',value))[0]/10)
-            
+
         if reg == 25: #unsigned
             #25   Verdichterstarts
             return int(value/10)
-            
+
         if reg in [1,5,6,7,11,12,13,14,15,16,17,18,21,23,27,37]: #signed
-            #1    Aussentemp °C        
-            #5    Vorlauf Soll °C
-            #6    Vorlauf Ist °C
-            #7    Ruecklauf °C
-            #11   Kondensator aus (MAX) °C
-            #12   Brauchwasser oben °C
-            #13   Brauchwasser unten °C
-            #14   Verd. Temp. Tho-R1 °C
-            #15   Verd. Temp. Tho-R2 °C
-            #16   Sauggas Temp. Tho-S °C
-            #17   Heissgas Temp. Tho-D °C
-            #18   Fluessigkeitstemp AMS °C
-            #21   Atemp. am AMS Tho-A °C
-            #23   Invertertemp. Tho-IP °C
-            #27   Vorlauf °C
-            #37   Max Diff. soll-ber °C
+            #1    Aussentemp ï¿½C
+            #5    Vorlauf Soll ï¿½C
+            #6    Vorlauf Ist ï¿½C
+            #7    Ruecklauf ï¿½C
+            #11   Kondensator aus (MAX) ï¿½C
+            #12   Brauchwasser oben ï¿½C
+            #13   Brauchwasser unten ï¿½C
+            #14   Verd. Temp. Tho-R1 ï¿½C
+            #15   Verd. Temp. Tho-R2 ï¿½C
+            #16   Sauggas Temp. Tho-S ï¿½C
+            #17   Heissgas Temp. Tho-D ï¿½C
+            #18   Fluessigkeitstemp AMS ï¿½C
+            #21   Atemp. am AMS Tho-A ï¿½C
+            #23   Invertertemp. Tho-IP ï¿½C
+            #27   Vorlauf ï¿½C
+            #37   Max Diff. soll-ber ï¿½C
             return float(unpack('h',pack('H',value))[0]/10)
-            
+
         if reg in [9,10,19,20,22,24]: #unsigned
              #9    Verd. Freq. Soll Hz
             #10   Verd. Freq. Ist Hz
@@ -178,18 +183,18 @@ class NIBE():
             #22   AMS Phase Ist A
             #24   Verdichterlaufzeit h
             return float(value/10)
-            
+
         if reg in [40,47]: #unsigned
-            #40   Hysterese °C
+            #40   Hysterese ï¿½C
             #47   Bw reg xP
             return float(value/2)
-            
+
         if reg in [43,49,50]:
-            #43   Stopptemp. Heizen °C
-            #49   Brauchwasser StartTemp °C 1.2
-            #50   Brauchwasser StopTemp °C  1.3
+            #43   Stopptemp. Heizen ï¿½C
+            #49   Brauchwasser StartTemp ï¿½C 1.2
+            #50   Brauchwasser StopTemp ï¿½C  1.3
             return float(value)
-        
+
             #2    ?
             #3    ?
             #26   ?
